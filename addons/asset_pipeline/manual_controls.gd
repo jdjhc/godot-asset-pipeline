@@ -95,21 +95,22 @@ func actions() -> void:
 	button(body, "仅从当前画布移除（保留资源池资产）", func():
 		call_api("canvas.remove", {"node_ids": selected})
 		dialog.hide())
-	button(body, "删除共享资产（所有画布移入回收站）", delete_selected)
+	button(body, "移入回收站（影响所有画布，可恢复）", delete_selected)
 	button(body, "从回收站恢复选中节点", func(): call_api("manual.archive", {"node_ids": selected, "archived": false}))
-	button(body, "预览：当前节点及下游重新生成", func(): rebuild("all"))
-	button(body, "预览：仅缺失 / 过期节点", func(): rebuild("stale"))
+	button(body, "重新生成范围：此节点及全部下游…", func(): rebuild("all"))
+	button(body, "重新生成范围：仅缺失或需更新的节点…", func(): rebuild("stale"))
 
 func rebuild(mode: String) -> void:
 	host.api_request("manual.plan", {"node_id": target, "mode": mode}, func(plan):
 		clear("确认修复范围 · 尚未提交生成")
 		label(str(plan.notice))
-		for text in plan.labels:
-			label("• " + str(text))
 		if not plan.node_ids.is_empty():
-			button(body, "创建修复分支（之后点击整体开始）", func():
+			button(body, "创建修复分支（保留原版本，尚不生成）", func():
 				call_api("manual.rebuild", {"node_ids": plan.node_ids})
-				dialog.hide()))
+				dialog.hide())
+		label("将处理 %d 个节点：" % plan.node_ids.size())
+		for text in plan.labels:
+			label("• " + str(text)))
 
 func dependencies() -> void:
 	if host._selected_id.is_empty():

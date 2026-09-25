@@ -27,7 +27,7 @@ func setup(panel: Control) -> void:
 	back.pressed.connect(_return_to_canvas)
 	navigation.add_child(back)
 	var hint := Label.new()
-	hint.text = "框选主体"
+	hint.text = "框选 → 创建节点 → 单独生成"
 	navigation.add_child(hint)
 	var bar := HBoxContainer.new()
 	root.add_child(bar)
@@ -53,7 +53,7 @@ func setup(panel: Control) -> void:
 	reset.pressed.connect(_delete_box)
 	bar.add_child(reset)
 	save = Button.new()
-	save.text = "创建主体节点"
+	save.text = "使用选框 → 创建主体节点"
 	save.disabled = true
 	save.pressed.connect(_save)
 	bar.add_child(save)

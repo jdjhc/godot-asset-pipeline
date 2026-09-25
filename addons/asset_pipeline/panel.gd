@@ -19,7 +19,7 @@ const VIDEO_EXTENSIONS := ["mp4", "mov", "mkv", "webm", "avi", "ogv"]
 const MODEL_EXTENSIONS := ["glb", "gltf", "fbx", "tscn", "scn"]
 const NODE_KINDS: Array[String] = ["concept", "subject", "view", "multiview", "model", "reference"]
 const KIND_LABELS: Array[String] = ["概念图", "主体设定", "单视图", "多视图", "三维模型", "参考资料"]
-const STATUS_LABELS: Dictionary = {"idle": "未运行", "ready": "可用", "draft": "待开始", "planned": "待开始", "completed": "已完成", "success": "已完成", "succeeded": "已完成", "imported": "已导入", "running": "运行中", "queued": "排队中", "pending": "等待中", "failed": "失败", "error": "错误", "cancelled": "已取消", "canceled": "已取消", "waiting": "等待中", "blocked": "上游未就绪", "submitting": "正在提交", "submitted": "已提交", "polling": "生成中", "downloading": "下载产物", "paused": "已暂停", "pausing": "正在暂停", "interrupted": "已中断", "submission_uncertain": "提交结果待确认"}
+const STATUS_LABELS: Dictionary = {"empty": "待生成", "idle": "未运行", "ready": "可用", "draft": "待开始", "planned": "待开始", "completed": "已完成", "success": "已完成", "succeeded": "已完成", "imported": "已导入", "running": "运行中", "queued": "排队中", "pending": "等待中", "failed": "失败", "error": "错误", "cancelled": "已取消", "canceled": "已取消", "waiting": "等待中", "blocked": "上游未就绪", "submitting": "正在提交", "submitted": "已提交", "polling": "生成中", "downloading": "下载产物", "paused": "已暂停", "pausing": "正在暂停", "interrupted": "已中断", "submission_uncertain": "提交结果待确认"}
 const ACTIVE_STATES: Array[String] = ["queued", "running", "pending", "waiting", "submitted", "polling", "submitting", "downloading", "pausing"]
 
 var _connection: Dictionary = {}
@@ -165,6 +165,11 @@ func _build_theme() -> void:
 	theme = palette
 
 func _build_ui() -> void:
+	var background := ColorRect.new()
+	background.color = Color("20272e")
+	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(background)
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side: String in ["left", "right", "top", "bottom"]:
@@ -180,9 +185,9 @@ func _build_ui() -> void:
 	title.add_theme_font_size_override("font_size", roundi(18 * _ui_scale))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
+	_button(header, "导入资源…", func(): _manual.import_files())
 	_button(header, "服务状态", func(): api_request("provider.status", {}, _provider_received))
 	_button(header, "刷新", _refresh_previews)
-	_button(header, "刷新预览", _refresh_previews)
 	_button(header, "视频选帧", _open_video_picker)
 	_button(header, "框选主体", _open_subject_picker)
 	_tools_button = _button(header, "展开工具", _toggle_tools)
@@ -299,17 +304,21 @@ func _build_ui() -> void:
 	_prompt.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_prompt.placeholder_text = "描述主体、风格、视角与约束。"
 	inspector.add_child(_prompt)
-	_button(inspector, "常用参数表单", func(): _manual.parameters())
-	_button(inspector, "当前节点作业管理", func(): _manual.job_actions())
-	_section(inspector, "参数 · JSON（高级）")
+	_button(inspector, "生成参数…", func(): _manual.parameters())
+	_button(inspector, "生成任务与失败处理…", func(): _manual.job_actions())
+	var advanced := CheckButton.new()
+	advanced.text = "高级：编辑 JSON 参数"
+	inspector.add_child(advanced)
 	_params = TextEdit.new()
 	_params.custom_minimum_size.y = 95
 	_params.text = "{}"
 	inspector.add_child(_params)
+	_params.hide()
+	advanced.toggled.connect(func(value): _params.visible = value)
 	var controls := HBoxContainer.new()
 	inspector.add_child(controls)
 	_save = _button(controls, "保存设置", _save_node)
-	_button(controls, "查看运行计划", _preview_plan)
+	_button(controls, "检查输入与影响范围", _preview_plan)
 	_run = _button(inspector, "运行所选节点…", _request_run)
 	_run.tooltip_text = "仅运行此节点，不会自动运行上游；按服务配置可能产生费用。失败后不会自动重试。"
 	_plan = TextEdit.new()
@@ -326,8 +335,8 @@ func _build_ui() -> void:
 	_versions = OptionButton.new()
 	_versions.item_selected.connect(_version_selected)
 	artifacts.add_child(_versions)
-	_button(artifacts, "采用正在预览的版本", _adopt_preview_version)
-	_button(artifacts, "与当前版本并排比较", _compare_versions)
+	_button(artifacts, "将此版本设为当前使用", _adopt_preview_version)
+	_button(artifacts, "对比：当前使用 ↔ 正在查看", _compare_versions)
 	_preview = AssetPreview.new()
 	_preview.file_context_requested.connect(func(path): _show_file_context(path, _selected_id))
 	_preview.video_frames_requested.connect(_open_video_path)
@@ -1098,7 +1107,7 @@ func _node_state(data: Dictionary) -> String:
 			label += " · %d%%" % clampi(int(progress), 0, 100)
 		return label
 	if data.get("stale", false):
-		return "产物已过期"
+		return "输入已变更 · 可重新生成"
 	var state: String = str(data.get("state", "idle"))
 	return str(STATUS_LABELS.get(state, state))
 
@@ -1129,6 +1138,9 @@ func _load_inspector() -> void:
 		_last_inspector_config = config_signature
 	_dirty = not draft.is_empty()
 	_set_editor_enabled(true)
+	_run.text = "重新生成此节点…" if not _text(data.get("current_version", "")).is_empty() else "生成此节点…"
+	_run.disabled = str(data.get("kind", "")) == "reference"
+	if _run.disabled: _run.text = "参考资产无需生成"
 	_update_versions()
 	_update_dependencies()
 	_rebuilding = false
@@ -1223,7 +1235,17 @@ func _preview_plan() -> void:
 		api_request("node.plan", {"node_id": _selected_id}, _plan_received)
 
 func _plan_received(value: Variant) -> void:
-	_plan.text = JSON.stringify(value, "  ")
+	var lines: Array[String] = ["输入检查（不会提交生成）"]
+	for edge in value.get("inputs", []):
+		var name: String = str(_nodes.get(str(edge.node_id), {}).get("label", edge.node_id))
+		lines.append("• " + name + " · " + ("已就绪" if not edge.get("files", []).is_empty() else "缺少产物"))
+	var affected: Array = value.get("affected", [])
+	lines.append("下游受影响：%d 个节点；不会自动重新生成。" % affected.size())
+	for id in affected: lines.append("  → " + str(_nodes.get(str(id), {}).get("label", id)))
+	var provider: Dictionary = value.get("provider_preview", {})
+	if provider.has("error"): lines.append("需要处理：" + str(provider.error))
+	_plan.text = "\n".join(lines)
+	_plan.tooltip_text = JSON.stringify(value, "  ")
 	_set_status("运行计划已更新。查看依赖与过期状态后，再决定是否运行。")
 
 func _request_run() -> void:
@@ -1272,7 +1294,8 @@ func _update_versions() -> void:
 	for index: int in range(_display_versions.size()):
 		var version: Dictionary = _display_versions[index]
 		var id: String = str(version.get("id", ""))
-		_versions.add_item(("当前 · " if id == current else "") + id.left(12) + "  " + str(version.get("created_at", "")).left(19))
+		_versions.add_item("版本 %d%s · %s" % [index + 1, "（当前使用）" if id == current else "（历史）", str(version.get("created_at", "")).left(19).replace("T", " ")])
+		_versions.set_item_tooltip(index, id)
 		if id == str(_preview_versions.get(_selected_id, current)):
 			selected = index
 	if selected >= 0:

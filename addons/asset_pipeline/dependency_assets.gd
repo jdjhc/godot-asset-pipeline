@@ -7,7 +7,7 @@ signal asset_selected(node_id: String)
 signal preview_created(preview: Control)
 
 const AssetPreview = preload("asset_preview.gd")
-const ROLE_LABELS: Dictionary = {"input": "输入", "front": "正面", "back": "背面", "right": "右侧", "left": "左侧", "top": "俯视", "bottom": "底面", "image": "图片", "reference": "参考", "model": "模型", "concept": "概念", "subject": "主体", "multiview": "多视图"}
+const ROLE_LABELS: Dictionary = {"selection_reference": "选区标注", "original": "原始图片", "source_video": "来源视频", "input": "输入", "front": "正面", "back": "背面", "right": "右侧", "left": "左侧", "top": "俯视", "bottom": "底面", "image": "图片", "reference": "参考", "model": "模型", "concept": "概念", "subject": "主体", "multiview": "多视图"}
 const PREVIEW_EXTENSIONS: Array[String] = ["png", "jpg", "jpeg", "webp", "bmp", "glb", "gltf", "fbx", "tscn", "scn", "mp4", "mov", "webm", "mkv", "avi", "ogv"]
 
 var _previews: Dictionary = {}

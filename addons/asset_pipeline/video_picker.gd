@@ -12,6 +12,7 @@ var video_path := ""
 var session: Dictionary = {}
 var selection: Dictionary = {}
 var menus: Dictionary = {}
+var selected_summary: Label
 const ROLES := ["", "front", "left", "back", "right"]
 
 func setup(panel: Control) -> void:
@@ -19,11 +20,17 @@ func setup(panel: Control) -> void:
 	title = "视频选帧 · 标记多视图"
 	size = Vector2i(1050, 760)
 	close_requested.connect(hide)
+	window_input.connect(func(event):
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE: hide())
 	var box := VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(box)
 	var bar := HBoxContainer.new()
 	box.add_child(bar)
+	var back := Button.new()
+	back.text = "← 返回画布"
+	back.pressed.connect(hide)
+	bar.add_child(back)
 	var choose := Button.new()
 	choose.text = "选择视频"
 	choose.pressed.connect(func(): file_dialog.popup_centered_ratio(0.7))
@@ -44,12 +51,12 @@ func setup(panel: Control) -> void:
 	count.prefix = "抽帧数量"
 	bar.add_child(count)
 	extract = Button.new()
-	extract.text = "均匀抽帧"
+	extract.text = "提取候选帧"
 	extract.disabled = true
 	extract.pressed.connect(_sample)
 	bar.add_child(extract)
 	save = Button.new()
-	save.text = "确认视图并创建模型节点"
+	save.text = "使用选中视图 → 创建模型节点"
 	save.disabled = true
 	save.pressed.connect(_commit)
 	bar.add_child(save)
@@ -57,6 +64,10 @@ func setup(panel: Control) -> void:
 	info.text = "默认抽 20 帧；选择正面及至少一个其他方向。只导入图片，不消耗生成积分。"
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(info)
+	selected_summary = Label.new()
+	selected_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(selected_summary)
+	_update_save()
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(scroll)
@@ -64,6 +75,7 @@ func setup(panel: Control) -> void:
 	grid.columns = 4
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(grid)
+	size_changed.connect(func(): grid.columns = maxi(1, int((size.x - 30) / 250.0)))
 	file_dialog = FileDialog.new()
 	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -92,6 +104,7 @@ func _sampled(value: Variant) -> void:
 	for frame: Dictionary in session.get("frames", []):
 		var card := VBoxContainer.new()
 		card.custom_minimum_size.x = 240
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(card)
 		var image := Image.load_from_file(ProjectSettings.globalize_path("res://" + str(frame.path)))
 		var preview := TextureRect.new()
@@ -105,7 +118,8 @@ func _sampled(value: Variant) -> void:
 		label.text = "第 %d 帧 · %.3f 秒" % [int(frame.index) + 1, float(frame.seconds)]
 		card.add_child(label)
 		var menu := OptionButton.new()
-		for text in ["未选择", "正面", "左侧", "背面", "右侧"]:
+		menu.tooltip_text = "方位以物体自身为准；每个方位只保留一帧，改选会替换旧选择。"
+		for text in ["不使用此帧", "正面", "物体左侧", "背面", "物体右侧"]:
 			menu.add_item(text)
 		var index := int(frame.index)
 		menus[index] = menu
@@ -132,12 +146,20 @@ func _assign(index: int, item: int) -> void:
 
 func _update_save() -> void:
 	save.disabled = not selection.has("front") or selection.size() < 2
+	if selected_summary != null:
+		var parts: Array[String] = []
+		for role in ["front", "left", "back", "right"]:
+			var title: String = {"front":"正面", "left":"左侧", "back":"背面", "right":"右侧"}[role]
+			parts.append(title + ("：第 %d 帧" % (int(selection[role]) + 1) if selection.has(role) else "：未选"))
+		selected_summary.text = "   |   ".join(parts) + ("\n请选择正面和至少一个其他方位。" if save.disabled else "\n已满足要求。创建节点不会立即生成或扣费。")
 
 func _commit() -> void:
 	save.disabled = true
-	host.api_request("video.commit", {"session_id": session.session_id, "selection": selection, "label": video_path.get_file().get_basename().left(40)}, func(_value):
-		info.text = "已入库并连接到新的模型节点。可在资产工坊检查后运行生成。"
-		host.refresh())
+	host.api_request("video.commit", {"session_id": session.session_id, "selection": selection, "label": video_path.get_file().get_basename().left(40)}, func(value):
+		info.text = "已创建模型节点。可回到画布检查后生成。"
+		host._pending_selection = str(value.model_node_id)
+		host.refresh()
+		hide())
 
 func _history() -> void:
 	host.api_request("video.sessions", {}, func(items):

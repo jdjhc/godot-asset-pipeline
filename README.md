@@ -2,11 +2,44 @@
 
 把概念图、主体图、三视图和 3D 模型放进同一条可追溯的生产链。原生 Godot 编辑器插件，Python 后台，Tripo API，附 MCP 与 Codex Skill。**生成结果直接入库，摆放到场景后再判断质量；局部重做保留历史。**
 
-## 演示
+## 工作流演示
 
-![资产工坊：多视图依赖与三个建筑模型旋转预览](docs/media/asset-pipeline-showcase.gif)
+四段短演示分别展示输入制作、人工校正、返工追溯和编辑器数据管理。重点是工具如何组织生产，而非模型本身的美术质量。
 
-真实插件界面的离线演示回放：展示已生成建筑的视图依赖、资产卡片和 GLB 旋转预览。不是实时生成耗时展示；演示不提交 API 请求。
+### 1. 框选主体 → 自动建立输入链
+
+在原图上拖出选框、调整颜色，确认后自动保存原图版本、框选标注和通用提示词，并连接到主体节点。无需手填位置或对象名称。
+
+![框选主体与自动依赖](docs/media/01-subject-selection.gif)
+
+### 2. 视频候选帧 → 明确方位的模型输入
+
+从已抽取的 20 张候选帧中标记正面、物体左侧、背面和物体右侧。改选同一方位会替换旧选择；缺少必要方位时不能确认。确认后返回画布并选中新建模型节点，保留源视频与帧的依赖。
+
+![视频选帧、方位约束与节点创建](docs/media/02-video-views.gif)
+
+### 3. 历史版本 → 输入追溯 → 局部返工
+
+查看产物生成时的实际输入，与当前配置区分；并排比较两个真实历史版本。上游要求改变后，下游显示更新提示；重新生成前可预览需要处理的节点，并保留原链路。
+
+![版本对比、依赖追溯与重生成范围](docs/media/03-versions-rebuild.gif)
+
+### 4. 多画布 → 自动整理 → 撤销与资产复用
+
+按依赖整理卡片；从画布移除后可撤销，资产仍在共享池中。切换到另一画布，可以复用同一资产及其历史版本，而非复制一套文件。
+
+![画布整理、撤销与共享资产](docs/media/04-canvas-management.gif)
+
+演示背后的实现可直接检查：
+
+| 工程问题 | 实现与验证 |
+| --- | --- |
+| 框选后只创建了一半节点怎么办？ | [事务式创建参考、标注和主体链](addons/asset_pipeline/backend/asset_pipeline/subject_selection.py)，[测试](tests/test_subject_selection.py) |
+| 如何知道旧产物用了哪套输入？ | [输入版本快照、生成指纹与失效传播](addons/asset_pipeline/backend/asset_pipeline/store.py)，[测试](tests/test_store.py) |
+| 如何限定返工范围和顺序？ | [筛选缺失/需更新节点并按依赖排序](addons/asset_pipeline/backend/asset_pipeline/manual.py)，[测试](tests/test_manual.py) |
+| 多画布复用与撤销如何避免误覆盖？ | [共享节点与独立摆位、撤销前状态一致性检查](addons/asset_pipeline/backend/asset_pipeline/canvases.py)，[测试](tests/test_canvases.py) |
+
+这些是隔离项目中执行真实插件操作的程序化录制，使用已有图片、视频候选帧与模型。等待时间经过压缩；不展示实时 AI 生成耗时，也不发起付费生成。录制说明见 [展示素材](docs/media/README.md)。
 
 ## 架构选择
 

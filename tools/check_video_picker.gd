@@ -14,6 +14,8 @@ func _initialize() -> void:
 	picker._assign(5, 1)
 	assert(picker.selection == {"front": 5})
 	assert(picker.save.disabled)
+	assert("正面：第 6 帧" in picker.selected_summary.text)
+	assert("左侧：未选" in picker.selected_summary.text)
 	picker.session = {"session_id":"old"}
 	picker.select_video("/missing/new_video.mp4")
 	assert(picker.session.is_empty())
