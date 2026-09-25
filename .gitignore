@@ -1,0 +1,14 @@
+.godot/
+__pycache__/
+*.pyc
+.DS_Store
+.asset_pipeline/
+assets/asset_pipeline/
+assets/tripo_urban/
+artifacts/tripo_urban/
+dist/
+
+.env
+.env.*
+*.log
+artifacts/

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Godot Asset Pipeline"
+  short_description: "Trace asset versions and rerun selected production stages"
