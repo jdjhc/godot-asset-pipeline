@@ -13,7 +13,7 @@ for folder in sorted(a.capture.iterdir()):
  palette=atlas.quantize(colors=224)
  encoded=[f.quantize(palette=palette,dither=Image.Dither.NONE) for f in frames]
  target=a.output/(folder.name+'.gif')
- encoded[0].save(target,save_all=True,append_images=encoded[1:],loop=0,duration=140,optimize=True,disposal=1)
+ encoded[0].save(target,save_all=True,append_images=encoded[1:],loop=0,duration=90,optimize=True,disposal=1)
  frames[len(frames)//2].save(a.output/(folder.name+'.png'))
  with Image.open(target) as check:
   duration=0
